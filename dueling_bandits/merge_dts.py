@@ -19,10 +19,11 @@ def my_argmax(A):
 
 class ArmTree(object):
 
-    def __init__(self, idx_arm, batch_size=4):
+    def __init__(self, idx_arm, batch_size=4, seed=42):
         self.batch_size = batch_size
         self.batches = []
-        np.random.shuffle(idx_arm)
+        self.prng = np.random.RandomState(seed=seed)
+        self.prng.shuffle(idx_arm)
         num_sets = np.int(np.ceil(np.float(len(idx_arm))/batch_size))
         idx_set = batch_size * np.arange(num_sets+1)
         idx_set[-1] = len(idx_arm)
@@ -38,12 +39,12 @@ class ArmTree(object):
         n_l = len(l)
         if n_l == 0:
             return False
-        self.batches[batch_idx].pop(l[np.random.randint(n_l)])
+        self.batches[batch_idx].pop(l[self.prng.randint(n_l)])
         return True
         
     def merge_batches(self):
         old_batches = self.batches[:]
-        np.random.shuffle(old_batches)
+        self.prng.shuffle(old_batches)
         old_batches.sort(cmp=lambda x, y: cmp(len(x), len(y)))
         self.batches = []
         i = 0
@@ -88,6 +89,9 @@ class ArmTree(object):
 
 class MergeDTS(AbstractDuel):
     """ merge double Thompson sampling: 
+    first arm: potential winner, second arm: potential winner.
+    CIKM submission, although it is call old.
+    The difference is in reletiva_sample()
     """
     def __init__(self, arms=[], arg=""):
         super(MergeDTS, self).__init__()
@@ -101,6 +105,7 @@ class MergeDTS(AbstractDuel):
         parser.add_argument("--old_output_prefix", type=str, default="")
         parser.add_argument("--epsilon", type=float, default=0.01)
         parser.add_argument('--C', type=int,default=-1)
+        parser.add_argument("--random_seed", type=int, default=42)
         args = parser.parse_known_args(arg.split())[0]
 
         self.continue_sampling_experiment = args.continue_sampling_experiment
@@ -109,11 +114,15 @@ class MergeDTS(AbstractDuel):
         self.alpha = args.alpha
         self.batch_size = args.batch_size
         self.epsilon = args.epsilon
-        
+
+        ### for random seed
+        self.random_seed = args.random_seed
+        self.prng = np.random.RandomState(self.random_seed)
+
         self.arms = arms
         self.n_arms = len(arms)
         self.i_arms = range(self.n_arms)
-        self.arm_tree = ArmTree(self.i_arms, self.batch_size)
+        self.arm_tree = ArmTree(self.i_arms, self.batch_size, seed=self.prng.randint(1000))
         self.w = np.ones((self.n_arms, self.n_arms))
         self.times = self.w + self.w.T
         if args.C == -1:
@@ -158,12 +167,12 @@ class MergeDTS(AbstractDuel):
         if n_arms == 1:
             self.theta = 0.5
             return 0
-        self.theta = np.random.beta(self.batch_w, self.batch_w.T)
+        self.theta = self.prng.beta(self.batch_w, self.batch_w.T)
         np.fill_diagonal(self.theta, 0.5)
         # self.theta = np.ones((n_arms, n_arms)) * 0.5
         # for i in range(n_arms):
         #     for j in range(i+1, n_arms):
-        #         self.theta[i][j] = np.random.beta(self.batch_w[i][j], self.batch_w[j][i])
+        #         self.theta[i][j] = self.prng.beta(self.batch_w[i][j], self.batch_w[j][i])
         #         self.theta[j][i] = 1 - self.theta[i][j]
         theta_score = (self.theta > 0.5).sum(axis=1)
         return my_argmax(theta_score) # relative index
@@ -173,8 +182,8 @@ class MergeDTS(AbstractDuel):
         n_arms = self.arm_tree.current_batch_size(self.current_batch)
         if n_arms == 1:
             return 0
-        # relative_theta = np.array([np.random.beta(self.batch_w[i][reletive_c], self.batch_w[reletive_c][i]) for i in range(n_arms)])
-        relative_theta = np.random.beta(self.batch_w[:, reletive_c], self.batch_w[reletive_c])
+        # relative_theta = np.array([self.prng.beta(self.batch_w[i][reletive_c], self.batch_w[reletive_c][i]) for i in range(n_arms)])
+        relative_theta = self.prng.beta(self.batch_w[:, reletive_c], self.batch_w[reletive_c])
         # big and small          
         relative_theta[reletive_c] = 1.0  
         arm_d_relative_idx = my_argmin(relative_theta) 

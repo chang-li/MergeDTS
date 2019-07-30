@@ -3,7 +3,7 @@ import pickle
 
 class AbstractDuel(object):
     def __init__(self):
-        self.n_disp = int(1e6)
+        self.n_disp = int(1e5)
 
     def get_arms(self):
         raise NotImplementedError("Derived class needs to implement "

@@ -4,17 +4,18 @@ import numpy as np
 import logging
 import argparse
 
+
 def my_argmax(a):
     idx = np.nonzero(a == a.max())[0]
     return idx[np.random.randint(0, len(idx))]
 
-
 class FastBeta:
-    def __init__(self, W, depth=100):
+    def __init__(self, W, depth=100, seed=42):
         # W - a square matrix containing a score sheet
         self.depth = depth
         self.shape = W.shape
         self.W = np.maximum(W, np.ones(W.shape))
+        self.prng = np.random.RandomState(seed)
         self.allSamples = np.zeros(self.shape+(depth,))
         self.sampleAllBeta()
         self.depthIndex = 0
@@ -23,13 +24,13 @@ class FastBeta:
     def sampleAllBeta(self):
         self.allSamples = 0.5*np.ones(self.shape+(self.depth,))
         for i in range(self.depth):
-            self.allSamples[:, :, i] = np.random.beta(self.W, self.W.T)
+            self.allSamples[:, :, i] = self.prng.beta(self.W, self.W.T)
             np.fill_diagonal(self.allSamples[:, :, i], 0.5)
 
     def update(self,r,c,w):
         self.W[r,c] = w
-        self.allSamples[r,c,:] = np.random.beta(self.W[r,c],self.W[c,r],self.depth)
-        self.allSamples[c,r,:] = np.random.beta(self.W[c,r],self.W[r,c],self.depth)
+        self.allSamples[r,c,:] = self.prng.beta(self.W[r,c],self.W[c,r],self.depth)
+        self.allSamples[c,r,:] = self.prng.beta(self.W[c,r],self.W[r,c],self.depth)
 
     def getSamples(self):
         if self.upper_or_lower == 'UPPER':
@@ -55,10 +56,15 @@ class DoubleThompsonSampling(AbstractDuel):
                             default="No")
         parser.add_argument("--old_output_dir", type=str, default="")
         parser.add_argument("--old_output_prefix", type=str, default="")
+        parser.add_argument("--random_seed", type=int, default=42)
         args = parser.parse_known_args(arg.split())[0]
         self.sampler = args.sampler
         self.alpha = args.alpha
         self.arms = arms
+
+        ### for random seed
+        self.random_seed = args.random_seed
+        self.prng = np.random.RandomState(self.random_seed)
 
         self.n_arms = len(arms)
         self.w = np.ones((self.n_arms, self.n_arms))
@@ -67,7 +73,7 @@ class DoubleThompsonSampling(AbstractDuel):
         self.t = 1
         self.ucb = np.ones(self.n_arms)
         self.lcb = np.ones(self.n_arms)
-        self.beta = FastBeta(self.w)
+        self.beta = FastBeta(self.w, seed=self.prng.randint(1000))
 
     def sample_tournament(self):
         self.ucb = self.w / self.times + np.sqrt(self.alpha * np.log(self.t) / self.times)
@@ -87,7 +93,7 @@ class DoubleThompsonSampling(AbstractDuel):
         self.lcb[arm_c] = 0.5
         lcb_bool = (self.lcb <= 0.5)
         idx = np.where(lcb_bool)[0]
-        rel_theta = np.random.beta(self.w[idx, arm_c], self.w[arm_c, idx])
+        rel_theta = self.prng.beta(self.w[idx, arm_c], self.w[arm_c, idx])
         rel_theta[np.sum(lcb_bool[0:arm_c])] = 0.5
         return idx[my_argmax(rel_theta)]
 

@@ -16,12 +16,14 @@ class SelfSparring(AbstractDuel):
         parser = argparse.ArgumentParser(prog=self.__class__.__name__)
         parser.add_argument("--sampler", type=str, default='Self-Sparring')
         parser.add_argument("--delta", type=float, default=3.0)
-        parser.add_argument("--m", type=int, default=2)
+        parser.add_argument("--m", type=int, default=2, help='number of arms chosen per round')
         parser.add_argument("--alpha", type=float, default=0.51)
         parser.add_argument("--continue_sampling_experiment", type=str,
                             default="No")
         parser.add_argument("--old_output_dir", type=str, default="")
         parser.add_argument("--old_output_prefix", type=str, default="")
+        parser.add_argument("--random_seed", type=int, default=42)
+
         args = parser.parse_known_args(arg.split())[0]
 
         self.alpha = args.alpha
@@ -33,9 +35,13 @@ class SelfSparring(AbstractDuel):
         self.iteration=0
         self.m = args.m
         self.delta = args.delta
-    
+
+        ### for random seed
+        self.random_seed = args.random_seed
+        self.prng = np.random.RandomState(self.random_seed)
+
     def ts_sample(self):
-        self.theta = np.random.beta(self.w, self.l)
+        self.theta = self.prng.beta(self.w, self.l)
         return my_argmax(self.theta)
         
     def get_arms(self):

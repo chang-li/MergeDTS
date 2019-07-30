@@ -18,10 +18,11 @@ def my_argmax(A):
 
 class ArmTree(object):
 
-    def __init__(self, idx_arm, batch_size=4):
+    def __init__(self, idx_arm, batch_size=4, seed=42):
         self.batch_size = batch_size
         self.batches = []
-        np.random.shuffle(idx_arm)
+        self.prng = np.random.RandomState(seed)
+        self.prng.shuffle(idx_arm)
         num_sets = np.int(np.ceil(np.float(len(idx_arm))/batch_size))
         idx_set = batch_size * np.arange(num_sets+1)
         idx_set[-1] = len(idx_arm)
@@ -37,12 +38,12 @@ class ArmTree(object):
         n_l = len(l)
         if n_l == 0:
             return False
-        self.batches[batch_idx].pop(l[np.random.randint(n_l)])
+        self.batches[batch_idx].pop(l[self.prng.randint(n_l)])
         return True
         
     def merge_batches(self):
         old_batches = self.batches[:]
-        np.random.shuffle(old_batches)
+        self.prng.shuffle(old_batches)
         old_batches.sort(cmp=lambda x, y: cmp(len(x), len(y)))
         self.batches = []
         i = 0
@@ -99,6 +100,8 @@ class MergeRUCB(AbstractDuel):
         parser.add_argument("--old_output_dir", type=str, default="")
         parser.add_argument("--old_output_prefix", type=str, default="")
         parser.add_argument('--C', type=int,default=-1)
+        parser.add_argument("--random_seed", type=int, default=42)
+
         args = parser.parse_known_args(arg.split())[0]
 
         self.continue_sampling_experiment = args.continue_sampling_experiment
@@ -107,11 +110,15 @@ class MergeRUCB(AbstractDuel):
         self.alpha = args.alpha
         self.batch_size = args.batch_size
         self.epsilon = args.epsilon
-        
+
+        ### for random seed
+        self.random_seed = args.random_seed
+        self.prng = np.random.RandomState(self.random_seed)
+
         self.arms = arms
         self.n_arms = len(arms)
         self.i_arms = range(self.n_arms)
-        self.arm_tree = ArmTree(self.i_arms, self.batch_size)
+        self.arm_tree = ArmTree(self.i_arms, self.batch_size, seed=self.prng.randint(1000))
         self.w = np.ones((self.n_arms, self.n_arms))
         self.times = self.w + self.w.T
         self.mean = self.w / self.times
@@ -147,7 +154,7 @@ class MergeRUCB(AbstractDuel):
         while self.arm_tree.prune_item(self.current_batch, self.ucb):
             self.compute_cb()
             n_arms = len(self.mean)
-        arm_c_relative_idx = np.random.randint(0, n_arms)
+        arm_c_relative_idx = self.prng.randint(0, n_arms)
         return arm_c_relative_idx
 
     def relative_sample(self, relative_c):
